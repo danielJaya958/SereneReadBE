@@ -1,0 +1,21 @@
+# Binaries
+/bin
+/main
+*.exe
+*.exe~
+*.dll
+
+# Environment Variables (SANGAT PENTING: JANGAN UPLOAD CREDENTIAL DB)
+.env
+
+# IDE specific files
+.vscode/
+.idea/
+
+# OS specific files
+.DS_Store
+Thumbs.db
+# Build output
+/books-api
+/books-api.bak
+/uploads
