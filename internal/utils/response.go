@@ -10,6 +10,19 @@ type StandardResponse struct {
 	Status  bool        `json:"status"`
 	Message string      `json:"message"`
 	Data    interface{} `json:"data,omitempty"`
+	Meta    interface{} `json:"meta,omitempty"`
+}
+
+// SendJSONWithMeta sama seperti SendJSON, ditambah field "meta" (misalnya info paginasi)
+func SendJSONWithMeta(w http.ResponseWriter, statusCode int, message string, data interface{}, meta interface{}) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(statusCode)
+	json.NewEncoder(w).Encode(StandardResponse{
+		Status:  true,
+		Message: message,
+		Data:    data,
+		Meta:    meta,
+	})
 }
 
 // SendJSON adalah helper untuk mengirim sukses respons

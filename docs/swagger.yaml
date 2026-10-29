@@ -1,22 +1,135 @@
 basePath: /api/v1
 definitions:
+  dto.BookContentResponse:
+    properties:
+      last_read_page:
+        type: integer
+      pdf_url:
+        type: string
+      total_pages:
+        type: integer
+    type: object
+  dto.BookDetailResponse:
+    properties:
+      author:
+        type: string
+      finished_at:
+        type: string
+      id:
+        type: integer
+      is_favorite:
+        type: boolean
+      last_read_page:
+        type: integer
+      pdf_url:
+        description: <-- Isi buku ada di sini
+        type: string
+      published_year:
+        type: integer
+      thumbnail_url:
+        type: string
+      title:
+        type: string
+      total_pages:
+        type: integer
+    type: object
   dto.BookRequest:
     properties:
       author:
-        minLength: 2
         type: string
       published_year:
-        description: Validasi tahun masuk akal
-        maximum: 2026
-        minimum: 1000
         type: integer
       title:
-        minLength: 2
         type: string
-    required:
-    - author
-    - published_year
-    - title
+    type: object
+  dto.BookStat:
+    properties:
+      book_id:
+        type: integer
+      last_read_date:
+        type: string
+      minutes:
+        type: integer
+      pages:
+        type: integer
+      sessions:
+        type: integer
+      thumbnail_url:
+        type: string
+      title:
+        type: string
+    type: object
+  dto.BookSummaryResponse:
+    properties:
+      author:
+        type: string
+      finished_at:
+        description: null = belum selesai dibaca
+        type: string
+      id:
+        type: integer
+      is_favorite:
+        type: boolean
+      last_read_page:
+        description: 0 = belum pernah dibaca
+        type: integer
+      published_year:
+        type: integer
+      thumbnail_url:
+        description: '"" = sampul belum dibuat'
+        type: string
+      title:
+        type: string
+      total_pages:
+        description: 0 = belum dihitung
+        type: integer
+    type: object
+  dto.BookmarkRequest:
+    properties:
+      note:
+        description: Opsional
+        type: string
+      page:
+        type: integer
+    type: object
+  dto.BookmarkResponse:
+    properties:
+      book_id:
+        type: integer
+      created_at:
+        type: string
+      id:
+        type: integer
+      note:
+        description: null = tanpa catatan
+        type: string
+      page:
+        type: integer
+      updated_at:
+        type: string
+    type: object
+  dto.BooksFinishedStats:
+    properties:
+      all_time:
+        type: integer
+      this_year:
+        type: integer
+    type: object
+  dto.DailyStat:
+    properties:
+      date:
+        type: string
+      minutes:
+        type: integer
+      pages:
+        type: integer
+      sessions:
+        type: integer
+    type: object
+  dto.FavoriteRequest:
+    properties:
+      is_favorite:
+        type: boolean
     type: object
   dto.LoginRequest:
     properties:
@@ -27,6 +140,19 @@ definitions:
     required:
     - email
     - password
+    type: object
+  dto.ReadingSessionsRequest:
+    type: object
+  dto.ReadingSessionsResult:
+    properties:
+      accepted:
+        type: integer
+      duplicates:
+        type: integer
+      rejected:
+        items:
+          $ref: '#/definitions/dto.RejectedSession'
+        type: array
     type: object
   dto.RegisterRequest:
     properties:
@@ -44,6 +170,69 @@ definitions:
     - password
     - username
     type: object
+  dto.RejectedSession:
+    properties:
+      client_session_id:
+        type: string
+      index:
+        type: integer
+      message:
+        type: string
+    type: object
+  dto.StatsAllTime:
+    properties:
+      active_days:
+        type: integer
+      minutes:
+        type: integer
+      pages:
+        type: integer
+      sessions:
+        type: integer
+    type: object
+  dto.StatsPeriod:
+    properties:
+      minutes:
+        type: integer
+      pages:
+        type: integer
+    type: object
+  dto.StatsSummaryResponse:
+    properties:
+      all_time:
+        $ref: '#/definitions/dto.StatsAllTime'
+      books_finished:
+        $ref: '#/definitions/dto.BooksFinishedStats'
+      current_streak_days:
+        type: integer
+      last_read_date:
+        description: null jika belum pernah membaca
+        type: string
+      longest_streak_days:
+        type: integer
+      this_week:
+        $ref: '#/definitions/dto.StatsWeek'
+      today:
+        $ref: '#/definitions/dto.StatsPeriod'
+    type: object
+  dto.StatsWeek:
+    properties:
+      active_days:
+        type: integer
+      minutes:
+        type: integer
+      pages:
+        type: integer
+    type: object
+  dto.UpdateBookRequest:
+    properties:
+      author:
+        type: string
+      published_year:
+        type: integer
+      title:
+        type: string
+    type: object
   dto.UpdateProgressRequest:
     properties:
       last_read_page:
@@ -58,11 +247,38 @@ info:
 paths:
   /books:
     get:
+      description: 'Tanpa parameter: semua buku (perilaku lama). Dengan salah satu
+        dari q, sort, page, atau limit: hasil dipaginasi dan response berisi field
+        "meta".'
+      parameters:
+      - description: Cari di judul atau pengarang
+        in: query
+        name: q
+        type: string
+      - description: created_at, title, author, published_year. Awali '-' untuk menurun.
+          Default -created_at
+        in: query
+        name: sort
+        type: string
+      - description: Halaman, mulai dari 1 (default 1)
+        in: query
+        name: page
+        type: integer
+      - description: Jumlah per halaman, 1-100 (default 20)
+        in: query
+        name: limit
+        type: integer
       produces:
       - application/json
       responses:
         "200":
           description: OK
+          schema:
+            items:
+              $ref: '#/definitions/dto.BookSummaryResponse'
+            type: array
+        "400":
+          description: Bad Request
           schema:
             additionalProperties: true
             type: object
@@ -73,12 +289,14 @@ paths:
             type: object
       security:
       - BearerAuth: []
-      summary: Ambil semua daftar buku
+      summary: Ambil daftar buku milik user yang login
       tags:
       - Books
     post:
       consumes:
       - multipart/form-data
+      description: Mengembalikan data buku yang baru dibuat. thumbnail_url masih kosong
+        sampai worker selesai membuat sampul.
       parameters:
       - description: Judul buku
         in: formData
@@ -106,8 +324,7 @@ paths:
         "201":
           description: Created
           schema:
-            additionalProperties: true
-            type: object
+            $ref: '#/definitions/dto.BookDetailResponse'
         "400":
           description: Bad Request
           schema:
@@ -125,6 +342,8 @@ paths:
       - Books
   /books/{id}:
     delete:
+      description: Menghapus data buku, progres, favorit, file PDF, dan sampul. Hanya
+        pemilik buku (selain itu 403).
       parameters:
       - description: Book ID
         in: path
@@ -144,8 +363,8 @@ paths:
           schema:
             additionalProperties: true
             type: object
-        "500":
-          description: Internal Server Error
+        "404":
+          description: Not Found
           schema:
             additionalProperties: true
             type: object
@@ -155,6 +374,8 @@ paths:
       tags:
       - Books
     get:
+      description: Hanya pemilik buku yang bisa mengakses. Buku milik user lain mengembalikan
+        404.
       parameters:
       - description: Book ID
         in: path
@@ -167,8 +388,7 @@ paths:
         "200":
           description: OK
           schema:
-            additionalProperties: true
-            type: object
+            $ref: '#/definitions/dto.BookDetailResponse'
         "404":
           description: Not Found
           schema:
@@ -179,9 +399,54 @@ paths:
       summary: Ambil detail satu buku
       tags:
       - Books
+    patch:
+      consumes:
+      - application/json
+      description: Semua field opsional; field yang tidak dikirim tidak diubah. Hanya
+        pemilik buku (selain itu 403).
+      parameters:
+      - description: Book ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Field yang diubah
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.UpdateBookRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.BookDetailResponse'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Edit sebagian info buku
+      tags:
+      - Books
     put:
       consumes:
       - application/json
+      description: Semua field wajib. Untuk mengubah sebagian field, gunakan PATCH.
       parameters:
       - description: Book ID
         in: path
@@ -200,6 +465,10 @@ paths:
         "200":
           description: OK
           schema:
+            $ref: '#/definitions/dto.BookDetailResponse'
+        "400":
+          description: Bad Request
+          schema:
             additionalProperties: true
             type: object
         "403":
@@ -207,18 +476,20 @@ paths:
           schema:
             additionalProperties: true
             type: object
-        "500":
-          description: Internal Server Error
+        "404":
+          description: Not Found
           schema:
             additionalProperties: true
             type: object
       security:
       - BearerAuth: []
-      summary: Update metadata buku (judul, author, tahun)
+      summary: Ganti semua metadata buku (judul, author, tahun)
       tags:
       - Books
-  /books/{id}/content:
+  /books/{id}/bookmarks:
     get:
+      description: Urut berdasarkan halaman. Daftar ini adalah acuan sinkronisasi
+        antar perangkat. Buku milik user lain mengembalikan 404.
       parameters:
       - description: Book ID
         in: path
@@ -231,8 +502,56 @@ paths:
         "200":
           description: OK
           schema:
-            additionalProperties:
-              type: string
+            items:
+              $ref: '#/definitions/dto.BookmarkResponse'
+            type: array
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Ambil semua bookmark satu buku
+      tags:
+      - Bookmarks
+    post:
+      consumes:
+      - application/json
+      description: Jika halaman itu sudah di-bookmark, catatannya diganti dan status
+        200 (bukan 201). Aman dikirim ulang.
+      parameters:
+      - description: Book ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Halaman dan catatan (opsional, maks 500 karakter)
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.BookmarkRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.BookmarkResponse'
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/dto.BookmarkResponse'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties: true
             type: object
         "404":
           description: Not Found
@@ -241,13 +560,147 @@ paths:
             type: object
       security:
       - BearerAuth: []
-      summary: Ambil URL PDF buku
+      summary: Tambah bookmark
+      tags:
+      - Bookmarks
+  /books/{id}/bookmarks/{bookmarkId}:
+    delete:
+      parameters:
+      - description: Book ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Bookmark ID
+        in: path
+        name: bookmarkId
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Hapus bookmark
+      tags:
+      - Bookmarks
+  /books/{id}/content:
+    get:
+      description: Hanya pemilik buku yang bisa mengakses. Buku milik user lain mengembalikan
+        404.
+      parameters:
+      - description: Book ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.BookContentResponse'
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Ambil URL PDF buku beserta progres baca
       tags:
       - Books
-  /books/{id}/progress:
+  /books/{id}/favorite:
     put:
       consumes:
       - application/json
+      parameters:
+      - description: Book ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Status favorit
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.FavoriteRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.BookDetailResponse'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Tandai atau hapus tanda favorit buku
+      tags:
+      - Books
+  /books/{id}/file:
+    get:
+      description: Hanya pemilik buku yang bisa mengakses. Mendukung Range request
+        untuk PDF viewer.
+      parameters:
+      - description: Book ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/pdf
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: file
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Download file PDF buku
+      tags:
+      - Books
+  /books/{id}/progress:
+    patch:
+      consumes:
+      - application/json
+      description: Jika halaman = total_pages, finished_at diisi otomatis.
       parameters:
       - description: Book ID
         in: path
@@ -268,8 +721,18 @@ paths:
           schema:
             additionalProperties: true
             type: object
-        "500":
-          description: Internal Server Error
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
           schema:
             additionalProperties: true
             type: object
@@ -310,6 +773,37 @@ paths:
       summary: Login user
       tags:
       - Auth
+  /reading-sessions:
+    post:
+      consumes:
+      - application/json
+      description: 'Maksimal 100 sesi. Setiap sesi divalidasi terpisah: sesi valid
+        disimpan walau sesi lain ditolak. client_session_id yang sudah tersimpan dihitung
+        sebagai duplicates. 400 hanya untuk body yang tidak bisa dibaca.'
+      parameters:
+      - description: Daftar sesi membaca
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.ReadingSessionsRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.ReadingSessionsResult'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Kirim sesi membaca (batch)
+      tags:
+      - Statistics
   /register:
     post:
       consumes:
@@ -342,6 +836,104 @@ paths:
       summary: Registrasi user baru
       tags:
       - Auth
+  /stats/books:
+    get:
+      description: Urut dari menit terbanyak. from/to opsional (tanpa keduanya = semua
+        waktu). Buku yang sudah dihapus tidak ikut.
+      parameters:
+      - description: Tanggal awal (YYYY-MM-DD)
+        in: query
+        name: from
+        type: string
+      - description: Tanggal akhir (YYYY-MM-DD)
+        in: query
+        name: to
+        type: string
+      - description: 1-50, bawaan 5
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/dto.BookStat'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Buku yang paling lama dibaca
+      tags:
+      - Statistics
+  /stats/daily:
+    get:
+      description: Satu item untuk setiap tanggal dari from sampai to, termasuk hari
+        tanpa membaca (diisi 0). Rentang maksimal 366 hari.
+      parameters:
+      - description: Tanggal awal (YYYY-MM-DD)
+        in: query
+        name: from
+        required: true
+        type: string
+      - description: Tanggal akhir (YYYY-MM-DD)
+        in: query
+        name: to
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/dto.DailyStat'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Statistik membaca per hari
+      tags:
+      - Statistics
+  /stats/summary:
+    get:
+      description: today = tanggal lokal HP, dipakai untuk "hari ini", "minggu ini"
+        (Senin-Minggu), dan streak. User tanpa sesi mendapat angka 0 dan last_read_date
+        null.
+      parameters:
+      - description: Tanggal lokal HP (YYYY-MM-DD)
+        in: query
+        name: today
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.StatsSummaryResponse'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Ringkasan statistik membaca
+      tags:
+      - Statistics
 securityDefinitions:
   BearerAuth:
     in: header

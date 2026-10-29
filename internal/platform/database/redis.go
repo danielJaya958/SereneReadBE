@@ -6,12 +6,11 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-func NewRedisConnection() (*redis.Client, error) {
-	// Konfigurasi standar untuk localhost
+func NewRedisConnection(addr string) (*redis.Client, error) {
 	rdb := redis.NewClient(&redis.Options{
-		Addr:     "localhost:6379", // Port default Redis
-		Password: "",               // Kosongkan jika tidak ada password
-		DB:       0,                // Database default (index 0)
+		Addr:     addr, // Dari config REDIS_ADDR (default 127.0.0.1:6379)
+		Password: "",   // Kosongkan jika tidak ada password
+		DB:       0,    // Database default (index 0)
 	})
 
 	// Coba ping untuk memastikan koneksi sukses

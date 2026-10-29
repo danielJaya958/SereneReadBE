@@ -22,16 +22,52 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
+                "description": "Tanpa parameter: semua buku (perilaku lama). Dengan salah satu dari q, sort, page, atau limit: hasil dipaginasi dan response berisi field \"meta\".",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "Books"
                 ],
-                "summary": "Ambil semua daftar buku",
+                "summary": "Ambil daftar buku milik user yang login",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Cari di judul atau pengarang",
+                        "name": "q",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "created_at, title, author, published_year. Awali '-' untuk menurun. Default -created_at",
+                        "name": "sort",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Halaman, mulai dari 1 (default 1)",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Jumlah per halaman, 1-100 (default 20)",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
                 "responses": {
                     "200": {
                         "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/dto.BookSummaryResponse"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
                         "schema": {
                             "type": "object",
                             "additionalProperties": true
@@ -52,6 +88,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
+                "description": "Mengembalikan data buku yang baru dibuat. thumbnail_url masih kosong sampai worker selesai membuat sampul.",
                 "consumes": [
                     "multipart/form-data"
                 ],
@@ -96,8 +133,7 @@ const docTemplate = `{
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "type": "object",
-                            "additionalProperties": true
+                            "$ref": "#/definitions/dto.BookDetailResponse"
                         }
                     },
                     "400": {
@@ -124,6 +160,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
+                "description": "Hanya pemilik buku yang bisa mengakses. Buku milik user lain mengembalikan 404.",
                 "produces": [
                     "application/json"
                 ],
@@ -144,8 +181,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "type": "object",
-                            "additionalProperties": true
+                            "$ref": "#/definitions/dto.BookDetailResponse"
                         }
                     },
                     "404": {
@@ -163,6 +199,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
+                "description": "Semua field wajib. Untuk mengubah sebagian field, gunakan PATCH.",
                 "consumes": [
                     "application/json"
                 ],
@@ -172,7 +209,7 @@ const docTemplate = `{
                 "tags": [
                     "Books"
                 ],
-                "summary": "Update metadata buku (judul, author, tahun)",
+                "summary": "Ganti semua metadata buku (judul, author, tahun)",
                 "parameters": [
                     {
                         "type": "integer",
@@ -195,6 +232,12 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
+                            "$ref": "#/definitions/dto.BookDetailResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
                             "type": "object",
                             "additionalProperties": true
                         }
@@ -206,8 +249,8 @@ const docTemplate = `{
                             "additionalProperties": true
                         }
                     },
-                    "500": {
-                        "description": "Internal Server Error",
+                    "404": {
+                        "description": "Not Found",
                         "schema": {
                             "type": "object",
                             "additionalProperties": true
@@ -221,6 +264,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
+                "description": "Menghapus data buku, progres, favorit, file PDF, dan sampul. Hanya pemilik buku (selain itu 403).",
                 "produces": [
                     "application/json"
                 ],
@@ -252,8 +296,243 @@ const docTemplate = `{
                             "additionalProperties": true
                         }
                     },
-                    "500": {
-                        "description": "Internal Server Error",
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            },
+            "patch": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Semua field opsional; field yang tidak dikirim tidak diubah. Hanya pemilik buku (selain itu 403).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Books"
+                ],
+                "summary": "Edit sebagian info buku",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Book ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Field yang diubah",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.UpdateBookRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.BookDetailResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/books/{id}/bookmarks": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Urut berdasarkan halaman. Daftar ini adalah acuan sinkronisasi antar perangkat. Buku milik user lain mengembalikan 404.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Bookmarks"
+                ],
+                "summary": "Ambil semua bookmark satu buku",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Book ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/dto.BookmarkResponse"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Jika halaman itu sudah di-bookmark, catatannya diganti dan status 200 (bukan 201). Aman dikirim ulang.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Bookmarks"
+                ],
+                "summary": "Tambah bookmark",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Book ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Halaman dan catatan (opsional, maks 500 karakter)",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.BookmarkRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.BookmarkResponse"
+                        }
+                    },
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/dto.BookmarkResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/books/{id}/bookmarks/{bookmarkId}": {
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Bookmarks"
+                ],
+                "summary": "Hapus bookmark",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Book ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Bookmark ID",
+                        "name": "bookmarkId",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
                         "schema": {
                             "type": "object",
                             "additionalProperties": true
@@ -269,13 +548,14 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
+                "description": "Hanya pemilik buku yang bisa mengakses. Buku milik user lain mengembalikan 404.",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "Books"
                 ],
-                "summary": "Ambil URL PDF buku",
+                "summary": "Ambil URL PDF buku beserta progres baca",
                 "parameters": [
                     {
                         "type": "integer",
@@ -289,10 +569,114 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
+                            "$ref": "#/definitions/dto.BookContentResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
                             "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/books/{id}/favorite": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Books"
+                ],
+                "summary": "Tandai atau hapus tanda favorit buku",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Book ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Status favorit",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.FavoriteRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.BookDetailResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/books/{id}/file": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Hanya pemilik buku yang bisa mengakses. Mendukung Range request untuk PDF viewer.",
+                "produces": [
+                    "application/pdf"
+                ],
+                "tags": [
+                    "Books"
+                ],
+                "summary": "Download file PDF buku",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Book ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "file"
                         }
                     },
                     "404": {
@@ -306,12 +690,13 @@ const docTemplate = `{
             }
         },
         "/books/{id}/progress": {
-            "put": {
+            "patch": {
                 "security": [
                     {
                         "BearerAuth": []
                     }
                 ],
+                "description": "Jika halaman = total_pages, finished_at diisi otomatis.",
                 "consumes": [
                     "application/json"
                 ],
@@ -348,8 +733,22 @@ const docTemplate = `{
                             "additionalProperties": true
                         }
                     },
-                    "500": {
-                        "description": "Internal Server Error",
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
                         "schema": {
                             "type": "object",
                             "additionalProperties": true
@@ -406,6 +805,52 @@ const docTemplate = `{
                 }
             }
         },
+        "/reading-sessions": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Maksimal 100 sesi. Setiap sesi divalidasi terpisah: sesi valid disimpan walau sesi lain ditolak. client_session_id yang sudah tersimpan dihitung sebagai duplicates. 400 hanya untuk body yang tidak bisa dibaca.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Statistics"
+                ],
+                "summary": "Kirim sesi membaca (batch)",
+                "parameters": [
+                    {
+                        "description": "Daftar sesi membaca",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.ReadingSessionsRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.ReadingSessionsResult"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
         "/register": {
             "post": {
                 "consumes": [
@@ -453,30 +898,351 @@ const docTemplate = `{
                     }
                 }
             }
+        },
+        "/stats/books": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Urut dari menit terbanyak. from/to opsional (tanpa keduanya = semua waktu). Buku yang sudah dihapus tidak ikut.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Statistics"
+                ],
+                "summary": "Buku yang paling lama dibaca",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Tanggal awal (YYYY-MM-DD)",
+                        "name": "from",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Tanggal akhir (YYYY-MM-DD)",
+                        "name": "to",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "1-50, bawaan 5",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/dto.BookStat"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/stats/daily": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Satu item untuk setiap tanggal dari from sampai to, termasuk hari tanpa membaca (diisi 0). Rentang maksimal 366 hari.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Statistics"
+                ],
+                "summary": "Statistik membaca per hari",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Tanggal awal (YYYY-MM-DD)",
+                        "name": "from",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Tanggal akhir (YYYY-MM-DD)",
+                        "name": "to",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/dto.DailyStat"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/stats/summary": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "today = tanggal lokal HP, dipakai untuk \"hari ini\", \"minggu ini\" (Senin-Minggu), dan streak. User tanpa sesi mendapat angka 0 dan last_read_date null.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Statistics"
+                ],
+                "summary": "Ringkasan statistik membaca",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Tanggal lokal HP (YYYY-MM-DD)",
+                        "name": "today",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.StatsSummaryResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
         }
     },
     "definitions": {
-        "dto.BookRequest": {
+        "dto.BookContentResponse": {
             "type": "object",
-            "required": [
-                "author",
-                "published_year",
-                "title"
-            ],
+            "properties": {
+                "last_read_page": {
+                    "type": "integer"
+                },
+                "pdf_url": {
+                    "type": "string"
+                },
+                "total_pages": {
+                    "type": "integer"
+                }
+            }
+        },
+        "dto.BookDetailResponse": {
+            "type": "object",
             "properties": {
                 "author": {
-                    "type": "string",
-                    "minLength": 2
+                    "type": "string"
+                },
+                "finished_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "is_favorite": {
+                    "type": "boolean"
+                },
+                "last_read_page": {
+                    "type": "integer"
+                },
+                "pdf_url": {
+                    "description": "\u003c-- Isi buku ada di sini",
+                    "type": "string"
                 },
                 "published_year": {
-                    "description": "Validasi tahun masuk akal",
-                    "type": "integer",
-                    "maximum": 2026,
-                    "minimum": 1000
+                    "type": "integer"
+                },
+                "thumbnail_url": {
+                    "type": "string"
                 },
                 "title": {
-                    "type": "string",
-                    "minLength": 2
+                    "type": "string"
+                },
+                "total_pages": {
+                    "type": "integer"
+                }
+            }
+        },
+        "dto.BookRequest": {
+            "type": "object",
+            "properties": {
+                "author": {
+                    "type": "string"
+                },
+                "published_year": {
+                    "type": "integer"
+                },
+                "title": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.BookStat": {
+            "type": "object",
+            "properties": {
+                "book_id": {
+                    "type": "integer"
+                },
+                "last_read_date": {
+                    "type": "string"
+                },
+                "minutes": {
+                    "type": "integer"
+                },
+                "pages": {
+                    "type": "integer"
+                },
+                "sessions": {
+                    "type": "integer"
+                },
+                "thumbnail_url": {
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.BookSummaryResponse": {
+            "type": "object",
+            "properties": {
+                "author": {
+                    "type": "string"
+                },
+                "finished_at": {
+                    "description": "null = belum selesai dibaca",
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "is_favorite": {
+                    "type": "boolean"
+                },
+                "last_read_page": {
+                    "description": "0 = belum pernah dibaca",
+                    "type": "integer"
+                },
+                "published_year": {
+                    "type": "integer"
+                },
+                "thumbnail_url": {
+                    "description": "\"\" = sampul belum dibuat",
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string"
+                },
+                "total_pages": {
+                    "description": "0 = belum dihitung",
+                    "type": "integer"
+                }
+            }
+        },
+        "dto.BookmarkRequest": {
+            "type": "object",
+            "properties": {
+                "note": {
+                    "description": "Opsional",
+                    "type": "string"
+                },
+                "page": {
+                    "type": "integer"
+                }
+            }
+        },
+        "dto.BookmarkResponse": {
+            "type": "object",
+            "properties": {
+                "book_id": {
+                    "type": "integer"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "note": {
+                    "description": "null = tanpa catatan",
+                    "type": "string"
+                },
+                "page": {
+                    "type": "integer"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.BooksFinishedStats": {
+            "type": "object",
+            "properties": {
+                "all_time": {
+                    "type": "integer"
+                },
+                "this_year": {
+                    "type": "integer"
+                }
+            }
+        },
+        "dto.DailyStat": {
+            "type": "object",
+            "properties": {
+                "date": {
+                    "type": "string"
+                },
+                "minutes": {
+                    "type": "integer"
+                },
+                "pages": {
+                    "type": "integer"
+                },
+                "sessions": {
+                    "type": "integer"
+                }
+            }
+        },
+        "dto.FavoriteRequest": {
+            "type": "object",
+            "properties": {
+                "is_favorite": {
+                    "type": "boolean"
                 }
             }
         },
@@ -492,6 +1258,26 @@ const docTemplate = `{
                 },
                 "password": {
                     "type": "string"
+                }
+            }
+        },
+        "dto.ReadingSessionsRequest": {
+            "type": "object"
+        },
+        "dto.ReadingSessionsResult": {
+            "type": "object",
+            "properties": {
+                "accepted": {
+                    "type": "integer"
+                },
+                "duplicates": {
+                    "type": "integer"
+                },
+                "rejected": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.RejectedSession"
+                    }
                 }
             }
         },
@@ -514,6 +1300,103 @@ const docTemplate = `{
                     "type": "string",
                     "maxLength": 50,
                     "minLength": 3
+                }
+            }
+        },
+        "dto.RejectedSession": {
+            "type": "object",
+            "properties": {
+                "client_session_id": {
+                    "type": "string"
+                },
+                "index": {
+                    "type": "integer"
+                },
+                "message": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.StatsAllTime": {
+            "type": "object",
+            "properties": {
+                "active_days": {
+                    "type": "integer"
+                },
+                "minutes": {
+                    "type": "integer"
+                },
+                "pages": {
+                    "type": "integer"
+                },
+                "sessions": {
+                    "type": "integer"
+                }
+            }
+        },
+        "dto.StatsPeriod": {
+            "type": "object",
+            "properties": {
+                "minutes": {
+                    "type": "integer"
+                },
+                "pages": {
+                    "type": "integer"
+                }
+            }
+        },
+        "dto.StatsSummaryResponse": {
+            "type": "object",
+            "properties": {
+                "all_time": {
+                    "$ref": "#/definitions/dto.StatsAllTime"
+                },
+                "books_finished": {
+                    "$ref": "#/definitions/dto.BooksFinishedStats"
+                },
+                "current_streak_days": {
+                    "type": "integer"
+                },
+                "last_read_date": {
+                    "description": "null jika belum pernah membaca",
+                    "type": "string"
+                },
+                "longest_streak_days": {
+                    "type": "integer"
+                },
+                "this_week": {
+                    "$ref": "#/definitions/dto.StatsWeek"
+                },
+                "today": {
+                    "$ref": "#/definitions/dto.StatsPeriod"
+                }
+            }
+        },
+        "dto.StatsWeek": {
+            "type": "object",
+            "properties": {
+                "active_days": {
+                    "type": "integer"
+                },
+                "minutes": {
+                    "type": "integer"
+                },
+                "pages": {
+                    "type": "integer"
+                }
+            }
+        },
+        "dto.UpdateBookRequest": {
+            "type": "object",
+            "properties": {
+                "author": {
+                    "type": "string"
+                },
+                "published_year": {
+                    "type": "integer"
+                },
+                "title": {
+                    "type": "string"
                 }
             }
         },

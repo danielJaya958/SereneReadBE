@@ -52,16 +52,16 @@ func main() {
 	log.Println("✅ Database PostgreSQL Terkoneksi!")
 
 	// 1.b. Init Redis (Untuk Caching)
-	rdb, err := database.NewRedisConnection()
+	rdb, err := database.NewRedisConnection(cfg.RedisAddr)
 	if err != nil {
-		log.Fatalf("Gagal connect ke Redis: %v", err)
+		log.Fatalf("Gagal connect ke Redis (%s): %v. Pastikan Redis jalan: wsl -d Ubuntu -- redis-server", cfg.RedisAddr, err)
 	}
 	log.Println("✅ Database Redis (Cache) Terkoneksi!")
 
 	// =========================================================================
 	// 1.c. TAMBAHAN: Inisialisasi Asynq (Client & Server)
 	// =========================================================================
-	redisOpt := asynq.RedisClientOpt{Addr: "localhost:6379"} // Gunakan port Redis Anda
+	redisOpt := asynq.RedisClientOpt{Addr: cfg.RedisAddr}
 
 	// ASYNQ CLIENT (Pencatat Tugas / Producer)
 	asynqClient := asynq.NewClient(redisOpt)
@@ -87,12 +87,20 @@ func main() {
 	bookService := service.NewBookService(bookRepo, rdb, asynqClient)
 	bookHandler := handlers.NewBookHandler(bookService)
 
+	bookmarkRepo := repository.NewBookmarkRepository(db)
+	bookmarkService := service.NewBookmarkService(bookmarkRepo, bookRepo)
+	bookmarkHandler := handlers.NewBookmarkHandler(bookmarkService)
+
+	statsRepo := repository.NewStatsRepository(db)
+	statsService := service.NewStatsService(statsRepo, bookRepo)
+	statsHandler := handlers.NewStatsHandler(statsService)
+
 	// =========================================================================
 	// 3. Daftarkan Tugas Worker (Router Khusus Background Job)
 	// =========================================================================
 	mux := asynq.NewServeMux()
 	mux.HandleFunc(worker.TypeGenerateThumbnail, func(ctx context.Context, t *asynq.Task) error {
-		return worker.HandleGenerateThumbnailTask(ctx, t, bookRepo)
+		return worker.HandleGenerateThumbnailTask(ctx, t, bookRepo, rdb)
 	})
 
 	// Jalankan Worker di dalam Goroutine (Berjalan Paralel/Background)
@@ -102,6 +110,9 @@ func main() {
 			log.Fatalf("Worker gagal berjalan: %v", err)
 		}
 	}()
+
+	// Buat ulang sampul yang belum jadi (misalnya server mati sebelum worker selesai)
+	go worker.EnqueueMissingThumbnails(context.Background(), bookRepo, asynqClient)
 
 	// =========================================================================
 	// 4. Setup Router Chi & Middleware (API)
@@ -138,15 +149,25 @@ func main() {
 			r.Get("/books", bookHandler.GetAll)
 			r.Get("/books/{id}", bookHandler.GetDetail)
 			r.Get("/books/{id}/content", bookHandler.GetContent)
+			r.Get("/books/{id}/file", bookHandler.GetFile)
 			r.Put("/books/{id}", bookHandler.Update)
+			r.Patch("/books/{id}", bookHandler.Patch)
 			r.Delete("/books/{id}", bookHandler.Delete)
+			r.Put("/books/{id}/favorite", bookHandler.SetFavorite)
 			r.Patch("/books/{id}/progress", bookHandler.UpdateProgress)
+
+			r.Get("/books/{id}/bookmarks", bookmarkHandler.List)
+			r.Post("/books/{id}/bookmarks", bookmarkHandler.Create)
+			r.Delete("/books/{id}/bookmarks/{bookmarkId}", bookmarkHandler.Delete)
+
+			r.Post("/reading-sessions", statsHandler.SaveSessions)
+			r.Get("/stats/summary", statsHandler.Summary)
+			r.Get("/stats/daily", statsHandler.Daily)
+			r.Get("/stats/books", statsHandler.Books)
 		})
 	})
 
-	fileServer := http.FileServer(http.Dir("./uploads/pdf/"))
-	r.Handle("/uploads/pdf/*", http.StripPrefix("/uploads/pdf/", fileServer))
-
+	// PDF tidak lagi di-serve statis: akses lewat GET /api/v1/books/{id}/file (dicek pemiliknya)
 	fileServerThumb := http.FileServer(http.Dir("./uploads/thumbnails/"))
 	r.Handle("/uploads/thumbnails/*", http.StripPrefix("/uploads/thumbnails/", fileServerThumb))
 
